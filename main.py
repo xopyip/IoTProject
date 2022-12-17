@@ -1,4 +1,6 @@
 import asyncio
+import time
+
 from asyncua import Client
 from device import Factory
 from config import Config
@@ -16,10 +18,16 @@ async def main():
                 config.set_agent_connection_str(device.name, input(f"Connection string for {device.name}:"))
             connection_str = config.get_agent_connection_str(device.name)
             agents.append(Agent(device, connection_str))
-        input("Press any key to shutdown...")
-        for agent in agents:
-            agent.close()
+        try:
+            while True:
+                tasks = [asyncio.create_task(agent.telemetry()) for agent in agents]
+                await asyncio.gather(*tasks)
+                time.sleep(1)
+        except:
+            for agent in agents:
+                agent.close()
 
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main())
