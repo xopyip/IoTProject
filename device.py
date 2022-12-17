@@ -1,5 +1,5 @@
 from enum import Enum
-from asyncua import Client
+from asyncua import Client, ua
 
 
 class DeviceProperty(Enum):
@@ -38,12 +38,18 @@ class Device:
         return self
 
     async def read_value(self, prop: DeviceProperty):
-        node = self.client.get_node(self.entries[prop.value])
-        return await node.read_value()
+        return await self.get_node(prop).read_value()
 
     async def call_method(self, prop: DeviceMethod):
         node = self.client.get_node(self.id)
         await node.call_method(prop.value)
+
+    def get_node(self, prop: DeviceProperty):
+        return self.client.get_node(self.entries[prop.value])
+
+    async def write_value(self, prop: DeviceProperty, val: ua.Variant):
+        node = self.get_node(prop)
+        await node.write_value(val)
 
 
 class Factory:
@@ -54,7 +60,7 @@ class Factory:
     @classmethod
     async def create(cls, client: Client):
         self = Factory(client)
-        objects = self.client.get_node("i=85")  # objects node
+        objects = self.client.get_node(client.nodes.objects)  # objects node
         for child in await objects.get_children():
             child_name = await child.read_browse_name()
             if child_name.Name != "Server":

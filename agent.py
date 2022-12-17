@@ -1,12 +1,16 @@
+import asyncio
+import datetime
 import json
 
-from device import Device, DeviceProperty
+from device import Device, DeviceProperty, DeviceMethod
+from asyncua import ua
 from azure.iot.device import IoTHubDeviceClient, Message, MethodRequest, MethodResponse
 
 
 class Agent:
     def __init__(self, device: Device, connection_str: str):
         self.device = device
+        self.tasks = []
         self.connection_str = connection_str
         self.client = IoTHubDeviceClient.create_from_connection_string(connection_str)
         self.client.connect()
@@ -28,6 +32,24 @@ class Agent:
         self.msg_idx += 1
         self.client.send_message(msg)
 
+    def get_observed_properties(self):
+        return [
+            DeviceProperty.DeviceError,
+            DeviceProperty.ProductionRate
+        ]
+
+    # handler for device change
+    async def datachange_notification(self, node, val, data):
+        name = await node.read_browse_name()
+        print(f"{name.Name}: {val}")
+        if name.Name == DeviceProperty.DeviceError.value:
+            patch = {"error": val}
+            if val > 0:
+                patch["last_error_date"] = datetime.datetime.now().isoformat()
+            self.client.patch_twin_reported_properties(patch)
+        elif name.Name == DeviceProperty.ProductionRate.value:
+            self.client.patch_twin_reported_properties({"production_rate": val})
+
     def message_handler(self, message):
         print(f"Received message on device {self.device.name}")
         print(message.data)
@@ -35,14 +57,24 @@ class Agent:
 
     def method_handler(self, method: MethodRequest):
         print(f"Received method call on device {self.device.name}")
-        print(method.name)
-        print(method.payload)
+        if method.name == "emergency_stop":
+            self.tasks.append(self.device.call_method(DeviceMethod.EmergencyStop))
+        elif method.name == "reset_error_status":
+            self.tasks.append(self.device.call_method(DeviceMethod.ResetErrorStatus))
+        elif method.name == "maintenance_done":
+            self.client.patch_twin_reported_properties({"last_maintenance_date": datetime.datetime.now().isoformat()})
         self.client.send_method_response(MethodResponse(method.request_id, 0))
 
     def twin_update(self, data):
-        print(f"Received twin update on device {self.device.name}")
-        print(data)
+        print(f"Received twin update on device {self.device.name}: {data}")
+        if "production_rate" in data:
+            self.tasks.append(self.device.write_value(DeviceProperty.ProductionRate, ua.Variant(data["production_rate"], ua.VariantType.Int32)))
 
     def close(self):
         self.client.shutdown()
 
+    def get_tasks(self):
+        tasks = [asyncio.create_task(task) for task in self.tasks]
+        self.tasks.clear()
+        tasks.append(asyncio.create_task(self.telemetry()))
+        return tasks
