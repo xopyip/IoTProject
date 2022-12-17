@@ -66,4 +66,4 @@ class Factory:
             print(device.name)
             if extended:
                 for prop in DeviceProperty:
-                    print(f"  - {prop}: {await device.read_value(prop)}")
+                    print(f"  - {prop.name}: {await device.read_value(prop)}")
