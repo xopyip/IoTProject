@@ -5,7 +5,7 @@ import time
 from enum import Enum
 
 from log import logger
-from device import Device, DeviceProperty, DeviceMethod
+from device import Device, DeviceProperty, DeviceMethod, DeviceError
 from asyncua import ua
 from azure.iot.device import IoTHubDeviceClient, Message, MethodRequest, MethodResponse
 
@@ -25,6 +25,9 @@ class Agent:
         self.client.on_method_request_received = self.method_handler
         self.client.on_twin_desired_properties_patch_received = self.twin_update
         self.msg_idx = 0
+        self.last_good_count = 0
+        self.last_bad_count = 0
+        self.errors = []
         self.last_telemetry_date = time.time()
 
     def get_tasks(self):
@@ -37,13 +40,23 @@ class Agent:
         if self.last_telemetry_date + 1 > time.time():
             return
         self.last_telemetry_date = time.time()
+
+        good_count = await self.device.read_value(DeviceProperty.GoodCount)
+        bad_count = await self.device.read_value(DeviceProperty.BadCount)
+
         data = {
             "ProductionStatus": await self.device.read_value(DeviceProperty.ProductionStatus),
             "WorkorderId": await self.device.read_value(DeviceProperty.WorkorderId),
-            "GoodCount": await self.device.read_value(DeviceProperty.GoodCount),
-            "BadCount": await self.device.read_value(DeviceProperty.BadCount),
+            "GoodCount": good_count,
+            "GoodDelta": good_count - self.last_good_count,
+            "BadCount": bad_count,
+            "BadDelta": bad_count - self.last_bad_count,
             "Temperature": await self.device.read_value(DeviceProperty.Temperature),
         }
+
+        self.last_good_count = good_count
+        self.last_bad_count = bad_count
+
         self.send_message(data, MessageType.TELEMETRY)
 
     def get_observed_properties(self):
@@ -58,9 +71,12 @@ class Agent:
         logger.info(f"OPC UA server sent data change of {name.Name} for device {self.device.name}: {val}")
         if name.Name == DeviceProperty.DeviceError.value:
             patch = {"error": val}
-            if val > 0:
-                patch["last_error_date"] = datetime.datetime.now().isoformat()
-                self.send_message({"error": val}, MessageType.EVENT)
+            errors = DeviceError.get_errors(val)
+            for error in errors:
+                if error not in self.errors:
+                    patch["last_error_date"] = datetime.datetime.now().isoformat()
+                    self.send_message({"error": error.name}, MessageType.EVENT)
+            self.errors = errors
             self.client.patch_twin_reported_properties(patch)
         elif name.Name == DeviceProperty.ProductionRate.value:
             self.client.patch_twin_reported_properties({"production_rate": val})

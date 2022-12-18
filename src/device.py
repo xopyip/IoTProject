@@ -17,6 +17,21 @@ class DeviceMethod(Enum):
     ResetErrorStatus = "ResetErrorStatus"
 
 
+class DeviceError(Enum):
+    EmergencyStop = 1
+    PowerFailure = 2
+    SensorFailure = 4
+    Unknown = 8
+
+    @classmethod
+    def get_errors(cls, code):
+        errors = []
+        for error in DeviceError:
+            if code & error.value:
+                errors.append(error)
+        return errors
+
+
 class Device:
 
     def __init__(self, client: Client, id):
