@@ -39,5 +39,5 @@ class Config:
         self.save()
 
     def save(self):
-        with open("config.ini", "w") as f:
+        with open("../config.ini", "w") as f:
             self.config.write(f)
