@@ -37,19 +37,18 @@ class Device:
             self.entries[node_name.Name] = child
         return self
 
+    def get_node(self, prop: DeviceProperty):
+        return self.client.get_node(self.entries[prop.value])
+
     async def read_value(self, prop: DeviceProperty):
         return await self.get_node(prop).read_value()
+
+    async def write_value(self, prop: DeviceProperty, val: ua.Variant):
+        await self.get_node(prop).write_value(val)
 
     async def call_method(self, prop: DeviceMethod):
         node = self.client.get_node(self.id)
         await node.call_method(prop.value)
-
-    def get_node(self, prop: DeviceProperty):
-        return self.client.get_node(self.entries[prop.value])
-
-    async def write_value(self, prop: DeviceProperty, val: ua.Variant):
-        node = self.get_node(prop)
-        await node.write_value(val)
 
 
 class Factory:
@@ -60,16 +59,9 @@ class Factory:
     @classmethod
     async def create(cls, client: Client):
         self = Factory(client)
-        objects = self.client.get_node(client.nodes.objects)  # objects node
+        objects = self.client.get_node(client.nodes.objects)
         for child in await objects.get_children():
             child_name = await child.read_browse_name()
             if child_name.Name != "Server":
                 self.devices.append(await Device.create(self.client, child))
         return self
-
-    async def list_devices(self, extended=False):
-        for device in self.devices:
-            print(device.name)
-            if extended:
-                for prop in DeviceProperty:
-                    print(f"  - {prop.name}: {await device.read_value(prop)}")

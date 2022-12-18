@@ -1,10 +1,17 @@
 import asyncio
 import datetime
 import json
+import time
+from enum import Enum
 
 from device import Device, DeviceProperty, DeviceMethod
 from asyncua import ua
 from azure.iot.device import IoTHubDeviceClient, Message, MethodRequest, MethodResponse
+
+
+class MessageType(Enum):
+    TELEMETRY = "telemetry"
+    EVENT = "event"
 
 
 class Agent:
@@ -14,13 +21,22 @@ class Agent:
         self.connection_str = connection_str
         self.client = IoTHubDeviceClient.create_from_connection_string(connection_str)
         self.client.connect()
-        self.client.on_message_received = self.message_handler
         self.client.on_method_request_received = self.method_handler
         self.client.on_twin_desired_properties_patch_received = self.twin_update
         self.msg_idx = 0
+        self.last_telemetry_date = time.time()
         print(f"Started agent for device {self.device.name}")
 
+    def get_tasks(self):
+        tasks = [asyncio.create_task(task) for task in self.tasks]
+        self.tasks.clear()
+        tasks.append(asyncio.create_task(self.telemetry()))
+        return tasks
+
     async def telemetry(self):
+        if self.last_telemetry_date + 1 > time.time():
+            return
+        self.last_telemetry_date = time.time()
         data = {
             "ProductionStatus": await self.device.read_value(DeviceProperty.ProductionStatus),
             "WorkorderId": await self.device.read_value(DeviceProperty.WorkorderId),
@@ -28,12 +44,10 @@ class Agent:
             "BadCount": await self.device.read_value(DeviceProperty.BadCount),
             "Temperature": await self.device.read_value(DeviceProperty.Temperature),
         }
-        msg = Message(json.dumps(data), f"{self.msg_idx}", "UTF-8", "JSON")
-        msg.custom_properties["type"] = "telemetry"
-        self.msg_idx += 1
-        self.client.send_message(msg)
+        self.send_message(data, MessageType.TELEMETRY)
 
-    def get_observed_properties(self):
+    @staticmethod
+    def get_observed_properties():
         return [
             DeviceProperty.DeviceError,
             DeviceProperty.ProductionRate
@@ -47,22 +61,10 @@ class Agent:
             patch = {"error": val}
             if val > 0:
                 patch["last_error_date"] = datetime.datetime.now().isoformat()
+                self.send_message({"error": val}, MessageType.EVENT)
             self.client.patch_twin_reported_properties(patch)
-
-            data = {
-                "error": val,
-            }
-            msg = Message(json.dumps(data), f"{self.msg_idx}", "UTF-8", "JSON")
-            msg.custom_properties["type"] = "event"
-            self.msg_idx += 1
-            self.client.send_message(msg)
         elif name.Name == DeviceProperty.ProductionRate.value:
             self.client.patch_twin_reported_properties({"production_rate": val})
-
-    def message_handler(self, message):
-        print(f"Received message on device {self.device.name}")
-        print(message.data)
-        print(message.custom_properties)
 
     def method_handler(self, method: MethodRequest):
         print(f"Received method call on device {self.device.name}")
@@ -77,13 +79,14 @@ class Agent:
     def twin_update(self, data):
         print(f"Received twin update on device {self.device.name}: {data}")
         if "production_rate" in data:
-            self.tasks.append(self.device.write_value(DeviceProperty.ProductionRate, ua.Variant(data["production_rate"], ua.VariantType.Int32)))
+            self.tasks.append(self.device.write_value(DeviceProperty.ProductionRate,
+                                                      ua.Variant(data["production_rate"], ua.VariantType.Int32)))
 
     def close(self):
         self.client.shutdown()
 
-    def get_tasks(self):
-        tasks = [asyncio.create_task(task) for task in self.tasks]
-        self.tasks.clear()
-        tasks.append(asyncio.create_task(self.telemetry()))
-        return tasks
+    def send_message(self, data, msg_type: MessageType):
+        msg = Message(json.dumps(data), f"{self.msg_idx}", "UTF-8", "JSON")
+        msg.custom_properties["type"] = msg_type.value
+        self.msg_idx += 1
+        self.client.send_message(msg)

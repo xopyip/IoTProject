@@ -28,13 +28,8 @@ async def main():
             agents.append(agent)
         try:
             while True:
-                tasks = []
-                for agent in agents:
-                    agent_tasks = agent.get_tasks()
-                    for task in agent_tasks:
-                        tasks.append(task)
-                await asyncio.gather(*tasks)
-                time.sleep(1)
+                await asyncio.gather(*[task for agent in agents for task in agent.get_tasks()])
+                time.sleep(0.1)
         except Exception as e:
             print(e)
             for subscription in subscriptions:
