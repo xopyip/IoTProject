@@ -27,7 +27,6 @@ class Config:
             self.config.add_section("AGENT")
 
         if not self.config.has_option("FACTORY", "url"):
-            print("Config file not found")
             url = input("OPC UA server url: ")
             self.config.set("FACTORY", "url", url)
             invalidated = True

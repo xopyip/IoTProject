@@ -4,6 +4,7 @@ import json
 import time
 from enum import Enum
 
+from log import logger
 from device import Device, DeviceProperty, DeviceMethod
 from asyncua import ua
 from azure.iot.device import IoTHubDeviceClient, Message, MethodRequest, MethodResponse
@@ -25,7 +26,6 @@ class Agent:
         self.client.on_twin_desired_properties_patch_received = self.twin_update
         self.msg_idx = 0
         self.last_telemetry_date = time.time()
-        print(f"Started agent for device {self.device.name}")
 
     def get_tasks(self):
         tasks = [asyncio.create_task(task) for task in self.tasks]
@@ -46,17 +46,16 @@ class Agent:
         }
         self.send_message(data, MessageType.TELEMETRY)
 
-    @staticmethod
-    def get_observed_properties():
+    def get_observed_properties(self):
         return [
-            DeviceProperty.DeviceError,
-            DeviceProperty.ProductionRate
+            self.device.get_node(DeviceProperty.DeviceError),
+            self.device.get_node(DeviceProperty.ProductionRate)
         ]
 
     # handler for device change
     async def datachange_notification(self, node, val, data):
         name = await node.read_browse_name()
-        print(f"{name.Name}: {val}")
+        logger.info(f"OPC UA server sent data change of {name.Name} for device {self.device.name}: {val}")
         if name.Name == DeviceProperty.DeviceError.value:
             patch = {"error": val}
             if val > 0:
@@ -67,7 +66,7 @@ class Agent:
             self.client.patch_twin_reported_properties({"production_rate": val})
 
     def method_handler(self, method: MethodRequest):
-        print(f"Received method call on device {self.device.name}")
+        logger.info(f"Cloud sent method call request for device {self.device.name}")
         if method.name == "emergency_stop":
             self.tasks.append(self.device.call_method(DeviceMethod.EmergencyStop))
         elif method.name == "reset_error_status":
@@ -77,7 +76,7 @@ class Agent:
         self.client.send_method_response(MethodResponse(method.request_id, 0))
 
     def twin_update(self, data):
-        print(f"Received twin update on device {self.device.name}: {data}")
+        logger.info(f"Cloud sent twin update for device {self.device.name}: {data}")
         if "production_rate" in data:
             self.tasks.append(self.device.write_value(DeviceProperty.ProductionRate,
                                                       ua.Variant(data["production_rate"], ua.VariantType.Int32)))
@@ -86,6 +85,7 @@ class Agent:
         self.client.shutdown()
 
     def send_message(self, data, msg_type: MessageType):
+        logger.debug(f"Sending message to cloud: {data}")
         msg = Message(json.dumps(data), f"{self.msg_idx}", "UTF-8", "JSON")
         msg.custom_properties["type"] = msg_type.value
         self.msg_idx += 1
