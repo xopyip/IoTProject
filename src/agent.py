@@ -25,8 +25,6 @@ class Agent:
         self.client.on_method_request_received = self.method_handler
         self.client.on_twin_desired_properties_patch_received = self.twin_update
         self.msg_idx = 0
-        self.last_good_count = 0
-        self.last_bad_count = 0
         self.errors = []
         self.last_telemetry_date = time.time()
 
@@ -41,21 +39,13 @@ class Agent:
             return
         self.last_telemetry_date = time.time()
 
-        good_count = await self.device.read_value(DeviceProperty.GoodCount)
-        bad_count = await self.device.read_value(DeviceProperty.BadCount)
-
         data = {
             "ProductionStatus": await self.device.read_value(DeviceProperty.ProductionStatus),
             "WorkorderId": await self.device.read_value(DeviceProperty.WorkorderId),
-            "GoodCount": good_count,
-            "GoodDelta": good_count - self.last_good_count,
-            "BadCount": bad_count,
-            "BadDelta": bad_count - self.last_bad_count,
+            "GoodCount": await self.device.read_value(DeviceProperty.GoodCount),
+            "BadCount": await self.device.read_value(DeviceProperty.BadCount),
             "Temperature": await self.device.read_value(DeviceProperty.Temperature),
         }
-
-        self.last_good_count = good_count
-        self.last_bad_count = bad_count
 
         self.send_message(data, MessageType.TELEMETRY)
 
