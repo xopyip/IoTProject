@@ -29,6 +29,7 @@ class Agent:
             "Temperature": await self.device.read_value(DeviceProperty.Temperature),
         }
         msg = Message(json.dumps(data), f"{self.msg_idx}", "UTF-8", "JSON")
+        msg.custom_properties["type"] = "telemetry"
         self.msg_idx += 1
         self.client.send_message(msg)
 
@@ -47,6 +48,14 @@ class Agent:
             if val > 0:
                 patch["last_error_date"] = datetime.datetime.now().isoformat()
             self.client.patch_twin_reported_properties(patch)
+
+            data = {
+                "error": val,
+            }
+            msg = Message(json.dumps(data), f"{self.msg_idx}", "UTF-8", "JSON")
+            msg.custom_properties["type"] = "event"
+            self.msg_idx += 1
+            self.client.send_message(msg)
         elif name.Name == DeviceProperty.ProductionRate.value:
             self.client.patch_twin_reported_properties({"production_rate": val})
 
