@@ -86,7 +86,7 @@ class Agent:
 
     def send_message(self, data, msg_type: MessageType):
         logger.debug(f"Sending message to cloud: {data}")
+        data["type"] = msg_type.value
         msg = Message(json.dumps(data), f"{self.msg_idx}", "UTF-8", "JSON")
-        msg.custom_properties["type"] = msg_type.value
         self.msg_idx += 1
         self.client.send_message(msg)
