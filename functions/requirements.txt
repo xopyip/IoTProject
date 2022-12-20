@@ -4,3 +4,4 @@
 
 azure-functions
 azure-iot-hub==2.6.1
+sendgrid
