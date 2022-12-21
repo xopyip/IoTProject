@@ -1,0 +1,71 @@
+--send errors as emails
+select 
+    error,
+    IoTHub.ConnectionDeviceId
+into [error-mail]
+from [asa-in]
+where type = 'event';
+
+--process 15 minute window of errors
+select 
+    IoTHub.ConnectionDeviceId,
+    count(*)
+into [emergency-stop]
+from [asa-in]
+where type = 'event'
+group by IoTHub.ConnectionDeviceId, SlidingWindow(minute, 15)
+having count(*) > 3;
+
+--calculate kpi in 15 minute tumbling widnow
+SELECT
+    IoTHub.ConnectionDeviceId,
+    DateAdd(minute,-15,System.Timestamp()) as StartTimestamp,
+    System.Timestamp() as EndTimestamp,
+    Sum(GoodCount) * 100 / (Sum(GoodCount) + Sum(BadCount)) as kpi
+into [production-rate-kpi]
+from [asa-in]
+where type = 'telemetry'
+group by IoTHub.ConnectionDeviceId, TumblingWindow(minute, 15);
+
+SELECT
+    IoTHub.ConnectionDeviceId as device,
+    DateAdd(minute,-15,System.Timestamp()) as StartTimestamp,
+    System.Timestamp() as EndTimestamp,
+    Sum(GoodCount) * 100 / (Sum(GoodCount) + Sum(BadCount)) as kpi
+into [kpi-blob]
+from [asa-in]
+where type = 'telemetry'
+group by IoTHub.ConnectionDeviceId, TumblingWindow(minute, 15);
+
+--temperature in 5 minute window
+SELECT
+    IoTHub.ConnectionDeviceId as device,
+    DateAdd(minute,-5,System.Timestamp()) as StartTimestamp,
+    System.Timestamp() as EndTimestamp,
+    Max(Temperature) as max,
+    Min(Temperature) as min,
+    Avg(Temperature) as avg
+into [temperature-blob]
+from [asa-in]
+where type = 'telemetry'
+group by IoTHub.ConnectionDeviceId, TumblingWindow(minute, 5);
+
+--errors in 30 minute window
+SELECT
+    IoTHub.ConnectionDeviceId as device,
+    DateAdd(minute,-30,System.Timestamp()) as StartTimestamp,
+    Count(error) as errorCount
+into [error-30-blob]
+from [asa-in]
+where type = 'event'
+group by IoTHub.ConnectionDeviceId, TumblingWindow(minute, 30);
+
+--sum workorder counts
+SELECT
+    WorkorderId as workorder,
+    Max(GoodCount) as good,
+    Max(BadCount) as bad
+into [production-blob]
+from [asa-in]
+where type = 'event'
+group by WorkorderId, TumblingWindow(minute, 30);

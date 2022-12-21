@@ -1,0 +1,42 @@
+{
+    "name": "asa-iot",
+    "startFile": "Transformation.asaql",
+    "configurations": [
+        {
+            "filePath": "JobConfig.json",
+            "subType": "JobConfig"
+        },
+        {
+            "filePath": "Outputs/error-30-blob.json",
+            "subType": "Output"
+        },
+        {
+            "filePath": "Outputs/kpi-blob.json",
+            "subType": "Output"
+        },
+        {
+            "filePath": "Outputs/production-blob.json",
+            "subType": "Output"
+        },
+        {
+            "filePath": "Outputs/temperature-blob.json",
+            "subType": "Output"
+        },
+        {
+            "filePath": "Outputs/production-rate-kpi.json",
+            "subType": "Output"
+        },
+        {
+            "filePath": "Outputs/error-mail.json",
+            "subType": "Output"
+        },
+        {
+            "filePath": "Outputs/emergency-stop.json",
+            "subType": "Output"
+        },
+        {
+            "filePath": "Inputs/asa-in.json",
+            "subType": "Input"
+        }
+    ]
+}

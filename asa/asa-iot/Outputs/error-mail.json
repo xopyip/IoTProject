@@ -1,0 +1,13 @@
+{
+    "Name": "error-mail",
+    "DataSourceType": "Azure Function",
+    "AzureFunctionProperties": {
+        "FunctionAppName": "iot-func-ul-mb",
+        "FunctionName": "HttpErrorMailHandler",
+        "ApiKey": null,
+        "MaxBatchSize": 262144,
+        "MaxBatchCount": 100
+    },
+    "DataSourceCredentialDomain": null,
+    "ScriptType": "Output"
+}

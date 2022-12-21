@@ -1,0 +1,13 @@
+{
+    "Name": "production-rate-kpi",
+    "DataSourceType": "Azure Function",
+    "AzureFunctionProperties": {
+        "FunctionAppName": "iot-func-ul-mb",
+        "FunctionName": "HttpProductionRateKpiHandler",
+        "ApiKey": null,
+        "MaxBatchSize": 262144,
+        "MaxBatchCount": 100
+    },
+    "DataSourceCredentialDomain": null,
+    "ScriptType": "Output"
+}
