@@ -69,5 +69,5 @@ SELECT
     Max(BadCount) as bad
 into [production-blob]
 from DATA
-where type = 'event'
+where type = 'telemetry'
 group by WorkorderId, SessionWindow(minute, 2, 1440);
